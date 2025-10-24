@@ -36,6 +36,10 @@ bld/
 *.rsuser
 *.cache
 
+# Service folders
+.claude/
+.specify/
+
 # Test results
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*

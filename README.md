@@ -1,254 +1,199 @@
 # WindowManagerCL
 
-A .NET library for programmatic window management on Windows - find, control, and navigate desktop windows with ease.
+.NET библиотека для программного управления окнами Windows.
 
-[![.NET](https://img.shields.io/badge/.NET-6.0%2B-blue)](https://dotnet.microsoft.com/)
-[![Platform](https://img.shields.io/badge/platform-Windows-blue)](https://www.microsoft.com/windows)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+## Что это
 
-## Features
+WindowManagerCL позволяет программно находить и управлять окнами Windows Desktop через Win32 API:
+- Поиск окон по заголовку, классу, Process ID, regex
+- Управление состоянием (активировать, свернуть, развернуть, закрыть)
+- Изменение позиции и размера
+- Навигация по иерархии окон (родители/дети)
 
-- 🔍 **Find Windows** - Search by title (exact/partial/regex), class name, or process ID
-- 🎛️ **Control Windows** - Activate, minimize, maximize, resize, move, and close windows
-- 🌲 **Navigate Hierarchy** - Access parent and child windows, enumerate controls
-- ⚡ **High Performance** - Efficient Win32 API usage with < 100ms searches
-- 🛡️ **Predictable Errors** - Clear exception hierarchy with detailed error information
-- 📝 **Full Documentation** - Complete XML docs and IntelliSense support
-
-## Installation
+## Подключение
 
 ```bash
-dotnet add package WindowManagerCL
+dotnet add reference путь/к/WindowManagerCL/WindowManagerCL.csproj
 ```
-
-## Quick Start
-
-### Find and activate a window
 
 ```csharp
 using WindowManagerCL.API;
-
-// Find window by exact title
-var notepad = Window.FindByTitle("Untitled - Notepad");
-
-// Bring to foreground
-notepad.Activate();
 ```
 
-### Control window state and position
+## Быстрый старт
 
 ```csharp
-using WindowManagerCL.API;
+// Найти окно
+var notepad = Window.FindByTitle("Notepad", exact: false);
 
-var window = Window.FindByTitle("My Application");
+// Управление
+notepad.Activate();      // активировать
+notepad.Maximize();      // развернуть
+notepad.MoveTo(100, 100); // переместить
+notepad.Resize(800, 600); // изменить размер
+notepad.Close();         // закрыть
 
-// Maximize window
-window.Maximize();
-
-// Move and resize
-window.MoveTo(100, 100);
-window.Resize(800, 600);
-
-// Or set both at once (more efficient)
-window.SetBounds(new WindowBounds(100, 100, 1024, 768));
+// Свойства
+string title = notepad.Title;
+WindowBounds bounds = notepad.Bounds;
+WindowState state = notepad.State;
+bool exists = notepad.IsValid;
 ```
 
-### Safe window search with Try-pattern
+## Основные возможности
+
+### Поиск окон
 
 ```csharp
-using WindowManagerCL.API;
+// По заголовку
+var window = Window.FindByTitle("My App");
+Window.TryFindByTitle("Calculator", exact: false, out var calc);
 
-if (Window.TryFindByTitle("Calculator", exact: false, out var calc))
-{
-    Console.WriteLine("Calculator found!");
-    calc.Maximize();
-}
-else
-{
-    Console.WriteLine("Calculator is not running");
-}
+// По regex
+var chromeWindows = Window.FindByTitleRegex(@".*Chrome$");
+
+// По классу/PID
+var notepadWindows = Window.FindByClassName("Notepad");
+var processWindows = Window.FindByProcessId(1234);
+
+// Все окна / активное окно
+var allWindows = Window.FindAll();
+var activeWindow = Window.GetForegroundWindow();
 ```
 
-### Find windows with regex
+### Управление окном
 
 ```csharp
-using WindowManagerCL.API;
+window.Activate();   // вывести на передний план
+window.Minimize();   // свернуть
+window.Maximize();   // развернуть
+window.Restore();    // восстановить
+window.Close();      // закрыть
 
-// Find all Chrome windows
-var chromeWindows = Window.FindByTitleRegex(@".*Google Chrome$");
-
-foreach (var window in chromeWindows)
-{
-    Console.WriteLine($"Chrome: {window.Title}");
-    Console.WriteLine($"  Position: {window.Bounds}");
-    Console.WriteLine($"  Process ID: {window.ProcessId}");
-}
+window.MoveTo(x, y);        // переместить
+window.Resize(w, h);        // изменить размер
+window.SetBounds(bounds);   // установить позицию и размер
 ```
 
-### Navigate window hierarchy
+### Иерархия
 
 ```csharp
-using WindowManagerCL.API;
-
-var mainWindow = Window.FindByTitle("My Application");
-
-// Get all child windows
-var children = mainWindow.GetChildren();
-
-foreach (var child in children)
-{
-    Console.WriteLine($"  Child: {child.ClassName}");
-}
-
-// Find specific child by class name
-var button = mainWindow.FindChild("Button", "OK");
-if (button != null)
-{
-    Console.WriteLine($"Found OK button at {button.Bounds}");
-}
+var parent = window.Parent;
+var children = window.GetChildren();
+var button = window.FindChild("Button", "OK");
 ```
 
-### Handle errors gracefully
+### Обработка ошибок
 
 ```csharp
-using WindowManagerCL.API;
-using WindowManagerCL.Exceptions;
-
 try
 {
-    var window = Window.FindByTitle("Temporary Window");
+    var window = Window.FindByTitle("My App");
     window.Maximize();
-    window.Close();
 }
 catch (WindowNotFoundException ex)
 {
-    Console.WriteLine($"Window not found: {ex.SearchCriteria}");
+    Console.WriteLine($"Окно не найдено: {ex.SearchCriteria}");
 }
 catch (InvalidWindowHandleException ex)
 {
-    Console.WriteLine($"Window closed: {ex.Reason}");
+    Console.WriteLine($"Окно закрыто: {ex.Reason}");
 }
 catch (WindowOperationException ex)
 {
-    Console.WriteLine($"Operation '{ex.Operation}' failed");
-    Console.WriteLine($"Win32 Error: {ex.Win32ErrorCode}");
+    Console.WriteLine($"Операция не удалась: {ex.Operation}");
 }
 ```
 
-## API Overview
+## API
 
-### Static Facade (`Window`)
+### Класс Window (статический)
 
-- `FindAll()` - Enumerate all top-level windows
-- `FindByTitle(title, exact)` - Find by exact or partial title
-- `TryFindByTitle(title, exact, out window)` - Non-throwing variant
-- `FindByTitleRegex(pattern)` - Find using regex pattern
-- `FindByClassName(className)` - Find by window class
-- `FindByProcessId(processId)` - Find windows owned by process
-- `FromHandle(handle)` - Wrap existing HWND
+- `FindAll()` - все окна
+- `FindByTitle(title, exact)` - по заголовку
+- `TryFindByTitle(title, exact, out window)` - безопасный поиск
+- `FindByTitleRegex(pattern)` - по regex
+- `FindByClassName(className)` - по классу
+- `FindByProcessId(processId)` - по PID
+- `FromHandle(handle)` - из HWND
+- `GetForegroundWindow()` - активное окно
 
-### Instance Methods (`WindowControl`)
+### Класс WindowControl
 
-**Properties:**
-- `Handle`, `Title`, `ClassName`, `ProcessId`
-- `Bounds`, `State`, `IsVisible`, `IsValid`, `Parent`
+**Свойства:**
+- `Handle` - HWND
+- `Title` - заголовок
+- `ClassName` - класс окна
+- `ProcessId` - PID
+- `IsVisible` - видимость
+- `IsValid` - существование
+- `Bounds` - позиция и размер
+- `State` - состояние (Normal/Minimized/Maximized)
+- `Parent` - родительское окно
 
-**State Management:**
-- `Activate()` - Bring to foreground
-- `Minimize()` - Minimize to taskbar
-- `Maximize()` - Maximize window
-- `Restore()` - Restore to normal state
-- `Close()` - Close window
+**Методы:**
+- `Activate()` - активировать
+- `Minimize()` - свернуть
+- `Maximize()` - развернуть
+- `Restore()` - восстановить
+- `Close()` - закрыть
+- `MoveTo(x, y)` - переместить
+- `Resize(width, height)` - изменить размер
+- `SetBounds(bounds)` - установить границы
+- `GetChildren()` - получить дочерние окна
+- `FindChild(className, text)` - найти дочернее окно
 
-**Position/Size:**
-- `MoveTo(x, y)` - Move window
-- `Resize(width, height)` - Resize window
-- `SetBounds(bounds)` - Set position and size
+### Типы
 
-**Hierarchy:**
-- `GetChildren()` - Enumerate child windows
-- `FindChild(className, text)` - Find child by class/text
+**WindowBounds** - структура позиции/размера:
+- `WindowBounds(x, y, width, height)`
+- Свойства: `X`, `Y`, `Width`, `Height`, `Right`, `Bottom`
 
-### Exceptions
+**WindowState** - enum состояния:
+- `Normal`, `Minimized`, `Maximized`
 
-- `WindowNotFoundException` - Window not found by search criteria
-- `WindowOperationException` - Operation failed (with Win32 error code)
-- `InvalidWindowHandleException` - Handle invalid or window closed
-- `WindowManagerException` - Base class (catch-all)
+### Исключения
 
-## Architecture
+- `WindowNotFoundException` - окно не найдено
+- `InvalidWindowHandleException` - невалидный handle
+- `WindowOperationException` - операция не удалась
+- `WindowManagerException` - базовое исключение
 
-WindowManagerCL follows a clean, layered architecture:
+## Требования
+
+- .NET 6.0+
+- Windows 10 1809+
+- Без сторонних зависимостей
+
+## Документация
+
+- **[Docs/README.md](WindowManagerCL/Docs/README.md)** - краткое руководство
+- **[Docs/API_REFERENCE.md](WindowManagerCL/Docs/API_REFERENCE.md)** - полный справочник API
+
+## Архитектура
 
 ```
 WindowManagerCL/
-├── API/
-│   ├── Window.cs              # Static facade for search
-│   ├── WindowControl.cs       # Instance-based window control
-│   └── WindowFinder.cs        # Internal search logic
-├── Infrastructure/
-│   ├── WinApi.cs              # P/Invoke declarations
-│   ├── Exceptions.cs          # Exception hierarchy
-│   └── WindowEnumerator.cs    # Enumeration helpers
-└── Models/
-    ├── WindowState.cs         # Enum: Normal, Minimized, Maximized
-    └── WindowBounds.cs        # Struct: X, Y, Width, Height
+├── API/               # Публичный API
+│   ├── Window.cs      # Статические методы поиска
+│   ├── WindowControl.cs  # Управление окном
+│   ├── WindowBounds.cs   # Структура границ
+│   ├── WindowState.cs    # Enum состояний
+│   └── Exceptions.cs     # Исключения
+├── Core/              # Внутренняя логика
+│   └── WindowFinder.cs   # Поиск и фильтрация
+└── Infrastructure/    # Win32 API
+    ├── WinApi.cs         # P/Invoke
+    └── WindowEnumerator.cs  # Перечисление
 ```
 
-## Requirements
+## Производительность
 
-- **.NET 6.0 or later** (LTS version recommended)
-- **Windows 10 version 1809 or later**
-- **No third-party dependencies** - uses only System libraries and Win32 APIs
+- Поиск окон: < 100ms для ~100 окон
+- Операции: < 50ms
+- Нулевые аллокации в hot paths
+- Regex кэшируются
 
-## Performance
+## Лицензия
 
-- Window searches complete in **< 100ms** for typical scenarios (< 100 windows)
-- Window manipulation operations complete in **< 50ms**
-- **Zero allocations** in hot paths (enumeration uses structs and spans)
-- Regex patterns are **compiled and cached** for repeated use
-
-## Design Principles
-
-1. **Simple and Intuitive API** - Static facade for finding, instance methods for controlling
-2. **Single Responsibility** - Window management only, no UI frameworks or process management
-3. **Predictable Error Handling** - Clear exception hierarchy with Try-pattern methods
-4. **Platform-Native Integration** - Proper Win32 API usage with encapsulated HWNDs
-5. **Performance and Minimal Overhead** - Efficient operations with async variants
-
-## Interactive Demo
-
-Try out all library features with our interactive console application:
-
-```bash
-cd InteractiveDemo/WindowManagerCL.InteractiveDemo
-dotnet run
-```
-
-**Features:**
-- Search windows by title, class, regex, or process ID
-- Control window state (activate, minimize, maximize, restore, close)
-- Manage window position and size
-- Explore window hierarchy (parent/child windows)
-- View detailed window information
-- Ready-to-use examples (Notepad, Chrome, Calculator)
-
-Perfect for learning the API and testing functionality!
-
-## Contributing
-
-Contributions are welcome! Please read our contributing guidelines and code of conduct.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Built with ❤️ for the .NET automation and testing community
-- Uses Win32 User32.dll APIs for reliable window management
-- Inspired by the need for simple, predictable window control in .NET
-
-## Support
-
-For questions, issues, or feature requests, please open an issue on GitHub.
+MIT License - see [LICENSE](LICENSE)
