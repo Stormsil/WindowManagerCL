@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>10.0</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Authors>WindowManagerCL Contributors</Authors>
+    <Description>A .NET library for programmatic window management on Windows - find, control, and navigate desktop windows.</Description>
+    <Copyright>Copyright © 2025</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/your-org/WindowManagerCL</RepositoryUrl>
+    <PackageTags>windows;window-management;automation;testing;win32;pinvoke</PackageTags>
+  </PropertyGroup>
+
+</Project>
