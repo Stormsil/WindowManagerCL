@@ -130,6 +130,177 @@ catch (WindowManagerException ex)
 }
 ```
 
+## Интеграция с SDK
+
+WindowManagerCL входит в состав **Windows Automation SDK** и предназначен для работы совместно с другими библиотеками:
+
+### Библиотеки-компаньоны
+
+1. **SendSequenceCL** - симуляция ввода с клавиатуры и мыши
+   - Клики мыши (левая/правая кнопка, двойной клик)
+   - Перемещение курсора
+   - Ввод текста и нажатие клавиш
+   - Комбинации клавиш (Ctrl+C, Alt+Tab, и т.д.)
+
+2. **WindowCaptureCL** - захват содержимого экрана
+   - Скриншоты окон по HWND
+   - Захват областей экрана
+   - Сохранение в различных форматах
+
+3. **ImageSearchCL** - поиск визуальных элементов
+   - Поиск изображений на скриншотах
+   - Template matching
+   - Координаты найденных элементов
+
+### Типичные сценарии интеграции
+
+#### Сценарий 1: Автоматизация заполнения веб-формы
+
+```csharp
+using WindowManagerCL.API;
+using SendSequenceCL;
+
+// Найти окно браузера
+var browser = Window.FindByTitle("Chrome", exact: false);
+browser.Activate();
+browser.Maximize();
+
+// Дать время на активацию
+Thread.Sleep(300);
+
+// Перейти к первому полю (Tab)
+KeyboardInput.SendKey(VirtualKeyCode.Tab);
+Thread.Sleep(100);
+
+// Заполнить имя
+KeyboardInput.SendKeys("Иван Иванов");
+Thread.Sleep(100);
+
+// Перейти к следующему полю
+KeyboardInput.SendKey(VirtualKeyCode.Tab);
+
+// Заполнить email
+KeyboardInput.SendKeys("ivan@example.com");
+Thread.Sleep(100);
+
+// Отправить форму (Enter)
+KeyboardInput.SendKey(VirtualKeyCode.Enter);
+```
+
+#### Сценарий 2: Клик по кнопке с использованием координат
+
+```csharp
+using WindowManagerCL.API;
+using SendSequenceCL;
+
+// Найти окно приложения
+var app = Window.FindByTitle("My Application");
+app.Activate();
+
+// Найти дочерний элемент (кнопку)
+var button = app.FindChild("Button", "OK");
+if (button != null)
+{
+    // Получить координаты центра кнопки
+    var bounds = button.Bounds;
+    int centerX = bounds.X + bounds.Width / 2;
+    int centerY = bounds.Y + bounds.Height / 2;
+
+    // Переместить мышь и кликнуть
+    MouseInput.MoveTo(centerX, centerY);
+    Thread.Sleep(50);
+    MouseInput.Click();
+}
+```
+
+#### Сценарий 3: Визуальная автоматизация (поиск элемента по изображению)
+
+```csharp
+using WindowManagerCL.API;
+using WindowCaptureCL;
+using ImageSearchCL;
+using SendSequenceCL;
+
+// 1. Найти и активировать целевое окно
+var gameWindow = Window.FindByTitle("My Game", exact: false);
+gameWindow.Activate();
+
+// 2. Убедиться что окно в нужной позиции
+gameWindow.SetBounds(new WindowBounds(0, 0, 1920, 1080));
+Thread.Sleep(200);
+
+// 3. Захватить скриншот окна
+var screenshot = WindowCapture.CaptureWindow(gameWindow.Handle);
+
+// 4. Найти кнопку "Play" на скриншоте
+var playButtonPos = ImageSearch.FindImage(screenshot, "templates/play_button.png");
+if (playButtonPos != null)
+{
+    // 5. Кликнуть по найденной кнопке
+    var windowBounds = gameWindow.Bounds;
+    int clickX = windowBounds.X + playButtonPos.X;
+    int clickY = windowBounds.Y + playButtonPos.Y;
+
+    MouseInput.MoveTo(clickX, clickY);
+    Thread.Sleep(100);
+    MouseInput.Click();
+}
+```
+
+#### Сценарий 4: Автоматизация работы с несколькими окнами
+
+```csharp
+using WindowManagerCL.API;
+using SendSequenceCL;
+
+// Найти все окна Notepad
+var notepadWindows = Window.FindByClassName("Notepad");
+
+foreach (var notepad in notepadWindows)
+{
+    // Активировать окно
+    notepad.Activate();
+    Thread.Sleep(200);
+
+    // Выделить всё (Ctrl+A)
+    KeyboardInput.SendKeyCombo(VirtualKeyCode.Control, VirtualKeyCode.A);
+    Thread.Sleep(50);
+
+    // Скопировать (Ctrl+C)
+    KeyboardInput.SendKeyCombo(VirtualKeyCode.Control, VirtualKeyCode.C);
+    Thread.Sleep(50);
+
+    // Вставить дважды (Ctrl+V)
+    KeyboardInput.SendKeyCombo(VirtualKeyCode.Control, VirtualKeyCode.V);
+    Thread.Sleep(50);
+    KeyboardInput.SendKeyCombo(VirtualKeyCode.Control, VirtualKeyCode.V);
+}
+```
+
+### Важные замечания при интеграции
+
+1. **Тайминги:** Всегда добавляйте небольшие задержки между операциями (50-300ms) для стабильности
+2. **Активация окна:** Перед отправкой ввода всегда вызывайте `window.Activate()`
+3. **Проверка существования:** Проверяйте `window.IsValid` если окно может закрыться
+4. **Координаты:** При использовании мыши учитывайте, что `window.Bounds` дает экранные координаты
+5. **Иерархия:** Используйте `FindChild()` для точного поиска элементов интерфейса
+
+### Разделение ответственности
+
+**WindowManagerCL отвечает за:**
+- Поиск окон
+- Управление состоянием окон (minimize, maximize, restore)
+- Позиционирование окон
+- Навигация по иерархии (parent, children)
+
+**WindowManagerCL НЕ отвечает за:**
+- Клики мышью → используйте **SendSequenceCL**
+- Ввод с клавиатуры → используйте **SendSequenceCL**
+- Захват скриншотов → используйте **WindowCaptureCL**
+- Поиск элементов по изображению → используйте **ImageSearchCL**
+
+Такое разделение обеспечивает чистую архитектуру, упрощает тестирование и позволяет использовать библиотеки независимо друг от друга.
+
 ## Требования
 
 - .NET 6.0+

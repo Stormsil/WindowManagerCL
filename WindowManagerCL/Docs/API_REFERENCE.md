@@ -911,12 +911,21 @@ foreach (var window in chromeWindows)
 ### Найти дочерний контрол и кликнуть
 
 ```csharp
+using WindowManagerCL.API;
+using SendSequenceCL; // для симуляции клика мыши
+
 var mainWindow = Window.FindByTitle("My Application");
 var button = mainWindow.FindChild("Button", "OK");
 if (button != null)
 {
-    button.Activate();
-    // Отправить клик через другой API (не в этой библиотеке)
+    // Получить координаты центра кнопки
+    var bounds = button.Bounds;
+    int centerX = bounds.X + bounds.Width / 2;
+    int centerY = bounds.Y + bounds.Height / 2;
+
+    // Кликнуть через SendSequenceCL
+    MouseInput.MoveTo(centerX, centerY);
+    MouseInput.Click();
 }
 ```
 
@@ -953,6 +962,335 @@ else
 - Операции над окном: < 50ms
 - Свойства всегда fresh (запрашивают Win32 при каждом доступе)
 - Regex паттерны компилируются и кэшируются
+
+---
+
+## Интеграция с Windows Automation SDK
+
+WindowManagerCL является частью комплексного **Windows Automation SDK** и предназначен для совместного использования с другими специализированными библиотеками.
+
+### Архитектура SDK
+
+```
+Windows Automation SDK
+├── WindowManagerCL    ← поиск и управление окнами
+├── SendSequenceCL     ← симуляция ввода (клавиатура + мышь)
+├── WindowCaptureCL    ← захват скриншотов
+└── ImageSearchCL      ← поиск элементов по изображению
+```
+
+### Библиотеки-компаньоны
+
+#### SendSequenceCL - симуляция ввода
+
+**Назначение:** Отправка кликов мыши, перемещение курсора, ввод текста и нажатие клавиш.
+
+**Типичное использование с WindowManagerCL:**
+
+```csharp
+using WindowManagerCL.API;
+using SendSequenceCL;
+
+// Найти окно
+var window = Window.FindByTitle("Notepad");
+window.Activate();
+
+// Отправить текст
+KeyboardInput.SendKeys("Hello, World!");
+
+// Нажать Enter
+KeyboardInput.SendKey(VirtualKeyCode.Enter);
+```
+
+**Когда использовать:**
+- Нужно кликнуть по элементу окна
+- Нужно ввести текст в поле
+- Нужно нажать комбинацию клавиш (Ctrl+C, Alt+Tab)
+- Нужно переместить мышь в определенную позицию
+
+#### WindowCaptureCL - захват экрана
+
+**Назначение:** Создание скриншотов окон и областей экрана.
+
+**Типичное использование с WindowManagerCL:**
+
+```csharp
+using WindowManagerCL.API;
+using WindowCaptureCL;
+
+// Найти окно
+var window = Window.FindByTitle("My App");
+
+// Захватить скриншот окна
+var screenshot = WindowCapture.CaptureWindow(window.Handle);
+
+// Сохранить
+screenshot.Save("screenshot.png");
+```
+
+**Когда использовать:**
+- Нужно сделать скриншот конкретного окна
+- Нужно захватить часть экрана для дальнейшего анализа
+- Нужно сохранить визуальное состояние окна
+
+#### ImageSearchCL - поиск по изображению
+
+**Назначение:** Поиск визуальных элементов (кнопок, иконок) на скриншотах.
+
+**Типичное использование с WindowManagerCL:**
+
+```csharp
+using WindowManagerCL.API;
+using WindowCaptureCL;
+using ImageSearchCL;
+using SendSequenceCL;
+
+// 1. Найти окно
+var window = Window.FindByTitle("Game");
+window.Activate();
+
+// 2. Захватить скриншот
+var screenshot = WindowCapture.CaptureWindow(window.Handle);
+
+// 3. Найти кнопку на скриншоте
+var buttonPos = ImageSearch.FindImage(screenshot, "play_button.png");
+
+// 4. Кликнуть по найденной кнопке
+if (buttonPos != null)
+{
+    var bounds = window.Bounds;
+    MouseInput.MoveTo(bounds.X + buttonPos.X, bounds.Y + buttonPos.Y);
+    MouseInput.Click();
+}
+```
+
+**Когда использовать:**
+- Нужно найти элемент, который нельзя найти через `FindChild()`
+- Визуальная автоматизация игр и приложений
+- Поиск элементов, у которых нет стабильных классов/заголовков
+
+### Полные сценарии автоматизации
+
+#### Сценарий: Автоматизация веб-формы
+
+```csharp
+using WindowManagerCL.API;
+using SendSequenceCL;
+
+// Найти и подготовить окно
+var browser = Window.FindByTitle("Google Chrome", exact: false);
+browser.Activate();
+browser.SetBounds(new WindowBounds(0, 0, 1280, 800));
+Thread.Sleep(200);
+
+// Открыть новую вкладку
+KeyboardInput.SendKeyCombo(VirtualKeyCode.Control, VirtualKeyCode.T);
+Thread.Sleep(500);
+
+// Ввести URL
+KeyboardInput.SendKeys("https://example.com/form");
+KeyboardInput.SendKey(VirtualKeyCode.Enter);
+Thread.Sleep(2000);
+
+// Заполнить форму (Tab для навигации между полями)
+KeyboardInput.SendKey(VirtualKeyCode.Tab);
+Thread.Sleep(100);
+KeyboardInput.SendKeys("Иван");
+
+KeyboardInput.SendKey(VirtualKeyCode.Tab);
+Thread.Sleep(100);
+KeyboardInput.SendKeys("Иванов");
+
+KeyboardInput.SendKey(VirtualKeyCode.Tab);
+Thread.Sleep(100);
+KeyboardInput.SendKeys("ivan@example.com");
+
+// Отправить форму
+KeyboardInput.SendKey(VirtualKeyCode.Enter);
+```
+
+#### Сценарий: Массовая обработка окон
+
+```csharp
+using WindowManagerCL.API;
+using WindowCaptureCL;
+using SendSequenceCL;
+
+// Найти все окна определенного типа
+var windows = Window.FindByClassName("Notepad");
+
+foreach (var window in windows)
+{
+    try
+    {
+        // Активировать
+        window.Activate();
+        Thread.Sleep(200);
+
+        // Выделить весь текст
+        KeyboardInput.SendKeyCombo(VirtualKeyCode.Control, VirtualKeyCode.A);
+        Thread.Sleep(50);
+
+        // Скопировать
+        KeyboardInput.SendKeyCombo(VirtualKeyCode.Control, VirtualKeyCode.C);
+        Thread.Sleep(50);
+
+        // Захватить скриншот окна
+        var screenshot = WindowCapture.CaptureWindow(window.Handle);
+        screenshot.Save($"window_{window.ProcessId}.png");
+
+        // Закрыть без сохранения
+        window.Close();
+        Thread.Sleep(100);
+        KeyboardInput.SendKey(VirtualKeyCode.N); // "No" в диалоге сохранения
+    }
+    catch (WindowOperationException ex)
+    {
+        Console.WriteLine($"Ошибка для окна {window.Title}: {ex.Message}");
+    }
+}
+```
+
+#### Сценарий: Визуальная автоматизация с поиском элементов
+
+```csharp
+using WindowManagerCL.API;
+using WindowCaptureCL;
+using ImageSearchCL;
+using SendSequenceCL;
+
+// Найти игровое окно
+var gameWindow = Window.FindByTitle("My Game", exact: false);
+gameWindow.Activate();
+gameWindow.Maximize();
+Thread.Sleep(500);
+
+// Цикл игровой автоматизации
+for (int i = 0; i < 10; i++)
+{
+    // Захватить текущий кадр
+    var screenshot = WindowCapture.CaptureWindow(gameWindow.Handle);
+
+    // Найти кнопку "Collect"
+    var collectButton = ImageSearch.FindImage(screenshot, "templates/collect.png");
+    if (collectButton != null)
+    {
+        var bounds = gameWindow.Bounds;
+        MouseInput.MoveTo(bounds.X + collectButton.X, bounds.Y + collectButton.Y);
+        MouseInput.Click();
+        Thread.Sleep(500);
+    }
+
+    // Найти врага
+    var enemy = ImageSearch.FindImage(screenshot, "templates/enemy.png");
+    if (enemy != null)
+    {
+        var bounds = gameWindow.Bounds;
+        MouseInput.MoveTo(bounds.X + enemy.X, bounds.Y + enemy.Y);
+        MouseInput.Click(); // атаковать
+        Thread.Sleep(1000);
+    }
+
+    Thread.Sleep(500);
+}
+```
+
+### Рекомендации по интеграции
+
+#### Тайминги и синхронизация
+
+```csharp
+// ПЛОХО: нет задержек, операции могут не успеть
+window.Activate();
+KeyboardInput.SendKeys("text");
+
+// ХОРОШО: даем время на активацию
+window.Activate();
+Thread.Sleep(200); // даем окну время активироваться
+KeyboardInput.SendKeys("text");
+```
+
+#### Проверка состояния окна
+
+```csharp
+// Перед операциями проверяйте существование окна
+if (!window.IsValid)
+{
+    throw new InvalidOperationException("Окно было закрыто");
+}
+
+// Если окно может быть свернуто
+if (window.State == WindowState.Minimized)
+{
+    window.Restore();
+    Thread.Sleep(200);
+}
+```
+
+#### Координаты и multi-monitor
+
+```csharp
+// Учитывайте, что координаты могут быть отрицательными
+var bounds = window.Bounds;
+Console.WriteLine($"Window at: {bounds.X}, {bounds.Y}");
+// может вывести: "Window at: -1920, 0" (второй монитор слева)
+
+// При работе с мышью всегда суммируйте координаты окна и элемента
+var button = window.FindChild("Button", "OK");
+var buttonBounds = button.Bounds;
+// buttonBounds уже содержит абсолютные экранные координаты
+MouseInput.MoveTo(buttonBounds.X + buttonBounds.Width / 2,
+                  buttonBounds.Y + buttonBounds.Height / 2);
+```
+
+#### Обработка ошибок
+
+```csharp
+try
+{
+    var window = Window.FindByTitle("My App");
+    window.Activate();
+    Thread.Sleep(200);
+
+    // Операции с SendSequenceCL
+    KeyboardInput.SendKeys("text");
+}
+catch (WindowNotFoundException)
+{
+    Console.WriteLine("Приложение не запущено");
+}
+catch (InvalidWindowHandleException)
+{
+    Console.WriteLine("Окно было закрыто");
+}
+catch (WindowOperationException ex)
+{
+    Console.WriteLine($"Ошибка операции: {ex.Message}");
+}
+```
+
+### Разделение ответственности
+
+**WindowManagerCL:**
+- ✓ Поиск окон (`FindByTitle`, `FindByClassName`, etc.)
+- ✓ Управление состоянием (`Activate`, `Minimize`, `Maximize`, `Restore`, `Close`)
+- ✓ Позиционирование (`MoveTo`, `Resize`, `SetBounds`)
+- ✓ Иерархия (`Parent`, `GetChildren`, `FindChild`)
+- ✓ Свойства окон (`Title`, `ClassName`, `ProcessId`, `Bounds`, `State`)
+
+**Что НУЖНО использовать из других библиотек:**
+- ✗ Клики мыши → **SendSequenceCL** (`MouseInput.Click()`)
+- ✗ Перемещение мыши → **SendSequenceCL** (`MouseInput.MoveTo()`)
+- ✗ Ввод текста → **SendSequenceCL** (`KeyboardInput.SendKeys()`)
+- ✗ Нажатие клавиш → **SendSequenceCL** (`KeyboardInput.SendKey()`)
+- ✗ Захват скриншотов → **WindowCaptureCL** (`WindowCapture.CaptureWindow()`)
+- ✗ Поиск элементов по изображению → **ImageSearchCL** (`ImageSearch.FindImage()`)
+
+Эта модульная архитектура обеспечивает:
+- **Простоту тестирования** - каждая библиотека тестируется отдельно
+- **Гибкость** - можно использовать только нужные библиотеки
+- **Чистоту кода** - четкое разделение ответственности
+- **Независимость** - обновление одной библиотеки не ломает другие
 
 ---
 

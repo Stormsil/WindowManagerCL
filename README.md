@@ -4,11 +4,23 @@
 
 ## Что это
 
-WindowManagerCL позволяет программно находить и управлять окнами Windows Desktop через Win32 API:
+WindowManagerCL - это профессиональная библиотека для управления окнами Windows, входящая в состав **Windows Automation SDK**. Позволяет программно находить и управлять окнами Windows Desktop через Win32 API:
+
 - Поиск окон по заголовку, классу, Process ID, regex
 - Управление состоянием (активировать, свернуть, развернуть, закрыть)
 - Изменение позиции и размера
 - Навигация по иерархии окон (родители/дети)
+
+### Экосистема SDK
+
+WindowManagerCL является частью комплексного решения для автоматизации Windows:
+
+- **WindowManagerCL** (эта библиотека) - управление окнами и их поиск
+- **SendSequenceCL** - симуляция ввода с клавиатуры и мыши (клики, перемещения, нажатия клавиш)
+- **WindowCaptureCL** - захват скриншотов окон и областей экрана
+- **ImageSearchCL** - поиск визуальных элементов на экране
+
+Вместе эти библиотеки обеспечивают 90%+ покрытие задач человекоподобной автоматизации Windows.
 
 ## Подключение
 
@@ -105,6 +117,94 @@ catch (WindowOperationException ex)
 }
 ```
 
+## Интеграция с SDK
+
+WindowManagerCL работает в связке с другими библиотеками SDK для полной автоматизации.
+
+### Пример: Автоматизация заполнения формы
+
+```csharp
+using WindowManagerCL.API;
+using SendSequenceCL; // библиотека для ввода
+
+// 1. Найти и активировать окно приложения
+var app = Window.FindByTitle("Регистрационная форма", exact: false);
+app.Activate();
+Thread.Sleep(100); // дать время на активацию
+
+// 2. Найти поле ввода имени и кликнуть в него
+var nameField = app.FindChild("Edit", "Имя");
+if (nameField != null)
+{
+    // Позиционировать мышь в центр поля
+    var bounds = nameField.Bounds;
+    MouseInput.MoveTo(bounds.X + bounds.Width / 2, bounds.Y + bounds.Height / 2);
+    MouseInput.Click();
+
+    // Ввести текст
+    KeyboardInput.SendKeys("Иван Иванов");
+}
+
+// 3. Найти кнопку и кликнуть
+var submitButton = app.FindChild("Button", "Отправить");
+if (submitButton != null)
+{
+    var btnBounds = submitButton.Bounds;
+    MouseInput.MoveTo(btnBounds.X + btnBounds.Width / 2, btnBounds.Y + btnBounds.Height / 2);
+    MouseInput.Click();
+}
+```
+
+### Пример: Визуальная автоматизация с поиском элементов
+
+```csharp
+using WindowManagerCL.API;
+using WindowCaptureCL;
+using ImageSearchCL;
+using SendSequenceCL;
+
+// 1. Найти окно игры
+var gameWindow = Window.FindByTitle("My Game", exact: false);
+gameWindow.Activate();
+gameWindow.SetBounds(new WindowBounds(0, 0, 1920, 1080));
+
+// 2. Захватить скриншот окна
+var screenshot = WindowCapture.CaptureWindow(gameWindow.Handle);
+
+// 3. Найти кнопку "Start" на скриншоте
+var buttonLocation = ImageSearch.FindImage(screenshot, "start_button_template.png");
+if (buttonLocation != null)
+{
+    // 4. Кликнуть по найденной кнопке
+    var gameBounds = gameWindow.Bounds;
+    MouseInput.MoveTo(gameBounds.X + buttonLocation.X, gameBounds.Y + buttonLocation.Y);
+    MouseInput.Click();
+}
+```
+
+### Пример: Мониторинг и автоматизация множества окон
+
+```csharp
+using WindowManagerCL.API;
+using SendSequenceCL;
+
+// Найти все окна браузера
+var browserWindows = Window.FindByTitleRegex(@".*(Chrome|Firefox|Edge)$");
+
+foreach (var browser in browserWindows)
+{
+    // Активировать окно
+    browser.Activate();
+    Thread.Sleep(200);
+
+    // Обновить страницу (F5)
+    KeyboardInput.SendKey(VirtualKeyCode.F5);
+    Thread.Sleep(500);
+}
+```
+
+**Примечание:** Примеры выше демонстрируют интеграцию с другими библиотеками SDK. Для работы с вводом используйте **SendSequenceCL**, для скриншотов - **WindowCaptureCL**, для поиска изображений - **ImageSearchCL**.
+
 ## API
 
 ### Класс Window (статический)
@@ -169,6 +269,7 @@ catch (WindowOperationException ex)
 
 - **[Docs/README.md](WindowManagerCL/Docs/README.md)** - краткое руководство
 - **[Docs/API_REFERENCE.md](WindowManagerCL/Docs/API_REFERENCE.md)** - полный справочник API
+- **[SDK_INTEGRATION.md](SDK_INTEGRATION.md)** - интеграция с другими библиотеками SDK
 
 ## Архитектура
 
